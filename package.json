@@ -1,0 +1,15 @@
+{
+  "name": "cloudagent",
+  "version": "1.0.0",
+  "description": "CloudAgent - AI CLI Assistant powered by MiniMax",
+  "scripts": {
+    "start": "bun run --bun src/cli.ts",
+    "repl": "bun run --bun src/cli.ts",
+    "chat": "bun run --bun src/cli.ts"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
