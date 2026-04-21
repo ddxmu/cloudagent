@@ -61,15 +61,27 @@ function rl(prompt: string = ''): Promise<string> {
 }
 
 function printBanner(model: string) {
-  const w = 50
+  const w = 52
+  const line = dim('\u2500'.repeat(w))
+
   console.log()
-  console.log(cyan('┌') + '─'.repeat(w) + cyan('┐'))
-  console.log(cyan('│') + bold(blue('   CloudAgent  ·  AI CLI Assistant')) + ' '.repeat(20) + cyan('│'))
-  console.log(cyan('└') + '─'.repeat(w) + cyan('┘'))
+  console.log(dim('\u256d') + '\u2500'.repeat(w) + dim('\u256e'))
+  console.log(dim('\u2502') + bold(cyan('   ___ _   _ ___ ___   ___ _   ___ ___   ')) + dim('\u2502'))
+  console.log(dim('\u2502') + bold(cyan('  / __| | | | _ ) _ ) | __| | | | __| _ \\  ')) + dim('\u2502'))
+  console.log(dim('\u2502') + bold(cyan(' | (__| |_| | _ \\ _ \\ | _|| |_| | _||   /  ')) + dim('\u2502'))
+  console.log(dim('\u2502') + bold(cyan('  \\___|___|_|___/___/ |_|  \\___/|_| |_|_\\  ')) + dim('\u2502'))
+  console.log(dim('\u2502') + bold(blue ('   \u2502 A I \u2502 C L I \u2502 A s s i s t a n t \u2502')) + dim('\u2502'))
+  console.log(dim('\u2570') + '\u2500'.repeat(w) + dim('\u256f'))
   console.log()
-  console.log(dim('  ★') + dim(' Powered by MiniMax') + dim('  ·  ') + bold(green(model)) + dim('  ·  REPL mode'))
-  console.log(dim('  /model ') + dim('· switch or add model') + dim('  ·  ') + bold(yellow(VERSION)))
-  console.log(dim('─'.repeat(w)))
+  const verTag   = bold(yellow(VERSION))
+  const modelTag = bold(green(model))
+  console.log(dim('  \u2605') + ' Powered by MiniMax'
+    + dim('  \u2502  ') + cyan('\u25c6') + ' Model: ' + modelTag
+    + dim('  \u2502  ') + cyan('\u25c6') + ' Version: ' + verTag)
+  console.log()
+  console.log(line)
+  console.log(dim('  exit / quit \u00b7 close session       /model \u00b7 switch model'))
+  console.log(line)
 }
 
 async function runChat(input: string, agent: CloudAgent) {
