@@ -4,10 +4,13 @@ import { stdin, stdout } from 'process'
 import { join } from 'path'
 import { CloudAgent } from './agent.js'
 import { sessionManager } from './session.js'
-import { bold, cyan, dim, green, blue, red } from './colors.js'
+import { bold, cyan, dim, green, blue, red, yellow } from './colors.js'
 import type { Message, PermissionContext } from './types.js'
 
-const CONFIG = join(homedir(), '.cloudagent', 'config.json')
+const VERSION = 'v0.1'
+const CONFIG_DIR = join(homedir(), '.cloudagent')
+const CONFIG_FILE = join(CONFIG_DIR, 'config.json')
+const MODELS_FILE = join(CONFIG_DIR, 'models.json')
 
 interface Config {
   apiKey: string
@@ -15,15 +18,39 @@ interface Config {
   model: string
 }
 
+interface ModelEntry {
+  baseUrl: string
+  description?: string
+}
+
+interface ModelsConfig {
+  [name: string]: ModelEntry
+}
+
 function cfg(): Config {
-  if (existsSync(CONFIG))
-    try { return JSON.parse(readFileSync(CONFIG, 'utf-8')) } catch {}
+  if (existsSync(CONFIG_FILE))
+    try { return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8')) } catch {}
   return { apiKey: '', baseUrl: 'https://api.minimaxi.com/v1', model: 'MiniMax-M2.7' }
 }
 
 function save(c: Config) {
-  mkdirSync(join(homedir(), '.cloudagent'), { recursive: true })
-  writeFileSync(CONFIG, JSON.stringify(c, null, 2))
+  mkdirSync(CONFIG_DIR, { recursive: true })
+  writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2))
+}
+
+function loadModels(): ModelsConfig {
+  const defaults: ModelsConfig = {
+    'MiniMax-M2.7': { baseUrl: 'https://api.minimaxi.com/v1', description: 'MiniMax M2.7 模型' },
+    'MiniMax-M2':   { baseUrl: 'https://api.minimaxi.com/v1', description: 'MiniMax M2 模型' },
+  }
+  if (existsSync(MODELS_FILE))
+    try { return { ...defaults, ...JSON.parse(readFileSync(MODELS_FILE, 'utf-8')) } } catch {}
+  return defaults
+}
+
+function saveModels(m: ModelsConfig) {
+  mkdirSync(CONFIG_DIR, { recursive: true })
+  writeFileSync(MODELS_FILE, JSON.stringify(m, null, 2))
 }
 
 function rl(prompt: string = ''): Promise<string> {
@@ -41,8 +68,7 @@ function printBanner(model: string) {
   console.log(cyan('└') + '─'.repeat(w) + cyan('┘'))
   console.log()
   console.log(dim('  ★') + dim(' Powered by MiniMax') + dim('  ·  ') + bold(green(model)) + dim('  ·  REPL mode'))
-  console.log()
-  console.log(dim('  exit / quit ') + dim('· close session'))
+  console.log(dim('  /model ') + dim('· switch or add model') + dim('  ·  ') + bold(yellow(VERSION)))
   console.log(dim('─'.repeat(w)))
 }
 
@@ -55,6 +81,60 @@ async function runChat(input: string, agent: CloudAgent) {
   process.stdout.write('\n' + bold(cyan('◈ Agent')) + '\n  ')
   await agent.chat([{ role: 'user', content: input }], s => process.stdout.write(s))
   console.log('\n' + divider)
+}
+
+async function cmdModel(args: string[]) {
+  const c = cfg()
+  const models = loadModels()
+
+  if (!args.length || args[0] === '') {
+    // List all models
+    console.log()
+    console.log(bold(cyan('◈ 可用模型')))
+    console.log(dim('─'.repeat(50)))
+    const entries = Object.entries(models)
+    entries.forEach(([name, info]) => {
+      const marker = name === c.model ? bold(green(' ▶ ')) : '   '
+      console.log(marker + bold(green(name)))
+      console.log('    ' + dim(info.baseUrl))
+      if (info.description) console.log('    ' + dim(info.description))
+      console.log()
+    })
+    console.log(dim('使用 /model <名称> 切换模型'))
+    console.log(dim('使用 /model add <名称> <baseUrl> 添加模型'))
+    return
+  }
+
+  if (args[0] === 'add') {
+    // Add a new model
+    if (!args[1] || !args[2]) {
+      console.log(red('用法: /model add <名称> <baseUrl>'))
+      console.log(dim('示例: /model add my-model https://api.example.com/v1'))
+      return
+    }
+    const name = args[1]
+    const baseUrl = args[2]
+    models[name] = { baseUrl, description: '自定义模型' }
+    saveModels(models)
+    console.log(green('✓ 模型已添加: ') + name)
+    console.log(dim('  ' + baseUrl))
+    console.log(dim('使用 /model ' + name + ' 切换到此模型'))
+    return
+  }
+
+  // Switch to a model
+  const target = args[0]
+  if (!models[target]) {
+    console.log(red('✗ 未知模型: ') + target)
+    console.log(dim('使用 /model 查看可用模型'))
+    return
+  }
+
+  c.model = target
+  c.baseUrl = models[target].baseUrl
+  save(c)
+  console.log(green('✓ 已切换到模型: ') + target)
+  console.log(dim('  ' + models[target].baseUrl))
 }
 
 async function main() {
@@ -77,6 +157,8 @@ async function main() {
     const ss = sessionManager.listSessions()
     if (!ss.length) { console.log('No sessions.'); return }
     ss.forEach((s: any) => console.log(cyan(s.id), '|', s.model, '|', s.createdAt))
+  } else if (args[0] === 'model') {
+    await cmdModel(args.slice(1))
   } else {
     const input = args.join(' ')
     if (!input) {
@@ -92,6 +174,14 @@ async function main() {
           const userInput = await rl(bold(green('\n◈ You\n  ')))
           if (!userInput.trim()) continue
           if (userInput.toLowerCase() === 'exit' || userInput.toLowerCase() === 'quit') break
+
+          // Handle built-in commands in REPL
+          if (userInput.startsWith('/model')) {
+            const parts = userInput.slice(1).trim().split(/\s+/)
+            await cmdModel(parts)
+            continue
+          }
+
           await runChat(userInput, agent)
         } catch (e) {
           if (String(e).includes('SIGINT')) break
